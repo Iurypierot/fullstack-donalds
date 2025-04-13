@@ -1,6 +1,6 @@
 "use client";
 import { Product } from "@prisma/client";
-import { createContext, ReactNode, useState } from "react";
+import { createContext, ReactNode, useEffect, useState } from "react";
 
 export interface CartProduct
   extends Pick<Product, "id" | "name" | "price" | "imageUrl"> {
@@ -28,20 +28,39 @@ export const CartContext = createContext<ICartContext>({
   increaseProductQuantity: () => {},
   removeProduct: () => {},
 });
+
 export const CartProvider = ({ children }: { children: ReactNode }) => {
   const [products, setProducts] = useState<CartProduct[]>([]);
   const [isOpen, setIsOpen] = useState<boolean>(false);
 
+  // Calculando o total do carrinho
   const total = products.reduce((acc, product) => {
     return acc + product.price * product.quantity;
-  }, 0)
+  }, 0);
 
+  // Persistindo o carrinho no localStorage
+  useEffect(() => {
+    const storedProducts = localStorage.getItem("cart");
+    if (storedProducts) {
+      setProducts(JSON.parse(storedProducts));
+    }
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem("cart", JSON.stringify(products));
+  }, [products]);
+
+  // Função para alternar o estado do carrinho (aberto/fechado)
   const toggleCart = () => {
     setIsOpen((prev) => !prev);
   };
+
+  // Função para adicionar um produto ao carrinho
   const addProduct = (product: CartProduct) => {
+    if (product.quantity <= 0) return;
+
     const productIsAlreadyOnTheCart = products.some(
-      (prevProduct) => prevProduct.id === product.id
+      (prevProduct) => prevProduct.id === product.id,
     );
 
     if (!productIsAlreadyOnTheCart) {
@@ -57,37 +76,45 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
           };
         }
         return prevProduct;
-      })
-  });
+      });
+    });
   };
 
-     const decreaseProductQuantity = (productId: string) => {
-        setProducts(prevProducts => {
-         return prevProducts.map((prevProduct) => {
-          if (prevProduct.id !== productId) {
-            return prevProduct;
+  // Função para diminuir a quantidade de um produto
+  const decreaseProductQuantity = (productId: string) => {
+    setProducts((prevProducts) => {
+      return prevProducts
+        .map((product) => {
+          if (product.id !== productId) return product;
+
+          if (product.quantity === 1) {
+            return null; // Se for 1, remover o produto do carrinho
           }
-           
-              if (prevProduct.quantity === 1) {
-                return prevProduct;
-              }
-                return { ...prevProduct, quantity: prevProduct.quantity - 1 }
-            })
-          })
-    };
-    const increaseProductQuantity = (productId: string) => {
-      setProducts((prevProducts) => {
-        return prevProducts.map((prevProduct) => {
-          if (prevProduct.id !== productId) {
-            return prevProduct;
-          }
-          return { ...prevProduct, quantity: prevProduct.quantity + 1 };
-        });
-      })
-    };
-    const removeProduct = (productId: string) => {
-      setProducts(prevProducts => prevProducts.filter(prevProduct => prevProduct.id !== productId))
-    }
+
+          return { ...product, quantity: product.quantity - 1 };
+        })
+        .filter((product): product is CartProduct => product !== null); // Remove os nulls
+    });
+  };
+
+  // Função para aumentar a quantidade de um produto
+  const increaseProductQuantity = (productId: string) => {
+    setProducts((prevProducts) => {
+      return prevProducts.map((product) => {
+        if (product.id !== productId) return product;
+
+        return { ...product, quantity: product.quantity + 1 };
+      });
+    });
+  };
+
+  // Função para remover um produto do carrinho
+  const removeProduct = (productId: string) => {
+    setProducts((prevProducts) =>
+      prevProducts.filter((product) => product.id !== productId),
+    );
+  };
+
   return (
     <CartContext.Provider
       value={{
